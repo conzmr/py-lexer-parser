@@ -25,27 +25,18 @@ class Lexer:
 	def __init__(self):
 		self.tokens = []
 		self.errors = []
-		self.current = ''
-		self.symbol_table = {
-		'keywords': {
-		'principal': 'KEYWORD',
-		'entero': 'KEYWORD',
-		'real': 'KEYWORD',
-				'logico': 'KEYWORD',
-				'si': 'KEYWORD',
-				'mientras': 'KEYWORD',
-				'regresa': 'KEYWORD',
-				'verdadero': 'KEYWORD',
-				'falso': 'KEYWORD'
-			}
-		}
+		self.current = None
+		self.keywords = {'principal', 'entero', 'real', 'logico', 'si', 'regresa', 'mientras', 'verdadero', 'falso'}
+		self.symbol_table = {}
 
 	def add_token(self, type, val, line, char):
 		self.tokens.append(Token(type, val, line, char))
 		self.current = None
 
-	def add_token_instance(self, token):
-		self.tokens.append(token)
+	def add_current_token(self):
+		if self.current.type == 'IDENTIFIER' and self.current.value in self.keywords:
+			self.current.type = 'KEYWORD'
+		self.tokens.append(self.current)
 		self.current = None
 
 	def get_tokens(self, source_code):
@@ -58,39 +49,41 @@ class Lexer:
 			line_num += 1
 			for ch in line:
 				ch_num += 1
+				if not (self.current is None):
+					if not ( ch and ch.strip() ):
+						self.add_current_token()
+					elif self.current.type == 'ASSIGNATION_OP':
+						if ch in "=":
+							self.add_token('RELATIONAL_OP', "==", self.current.line, self.current.ch)
+							continue
+						else:
+							self.add_current_token()
+					elif self.current.type == 'INTEGER':
+						if ch in ".":
+							self.current.type = 'REAL'
+							self.current.value += ch
+							continue
+						elif re.match("[ 0-9 ]", ch):
+							self.current.value += ch
+							continue
+						else:
+							self.add_current_token()
+					elif self.current.type == 'REAL':
+						if re.match("[ 0-9 ]", ch):
+							self.current.value += ch
+							continue
+						else:
+							if re.match("[ 0-9 ]*.[ 0-9 ]*", self.current.value):
+								self.add_current_token()
+							else:
+								self.errors.append(Error("LexicalError", line_num, ch_num, ch, line))
+					elif self.current.type == 'IDENTIFIER':
+						if re.match("[a-zA-Z0-9]", ch):
+							self.current.value += ch
+							continue
+						else:
+							self.add_current_token()
 				if ch and ch.strip():
-					if not (self.current is None):
-						if self.current.type == 'ASSIGNATION_OP':
-							if ch in "=":
-								self.add_token('RELATIONAL_OP', "==", self.current.line, self.current.ch)
-								continue
-							else:
-								self.add_token_instance(self.current)
-						elif self.current.type == 'INTEGER':
-							if ch in ".":
-								self.current.type = 'REAL'
-								self.current.value += ch
-								continue
-							elif re.match("[ 0-9 ]", ch):
-								self.current.value += ch
-								continue
-							else:
-								self.add_token_instance(self.current)
-						elif self.current.type == 'REAL':
-							if re.match("[ 0-9 ]", ch):
-								self.current.value += ch
-								continue
-							else:
-								if re.match("[ 0-9 ]*.[ 0-9 ]*", self.current.value):
-									self.add_token_instance(self.current)
-								else:
-									self.errors.append(Error("LexicalError", line_num, ch_num, ch, line))
-						elif self.current.type == 'IDENTIFIER':
-							if re.match("[a-zA-Z0-9]", ch):
-								self.current.value += ch
-								continue
-							else:
-								self.add_token_instance(self.current)
 					if ch in "+-*/^":
 						self.add_token('ARITHMETIC_OP', ch, line_num, ch_num)
 					elif ch in "&|!":
@@ -117,6 +110,8 @@ class Lexer:
 						self.current = Token('INTEGER', ch, line_num, ch_num)
 					else:
 						self.errors.append(Error("LexicalError", line_num, ch_num, ch, line))
+		if not (self.current is None):
+			self.add_current_token()
 		print(self.tokens)
 		print(self.errors)
 
